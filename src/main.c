@@ -73,7 +73,6 @@ static struct option long_options[] =
 };
 
 extern void play_single_player();
-
 #endif
 
 int hwalpha;
@@ -120,7 +119,6 @@ struct event eventlog[256];
 unsigned int event_count = 0;
 int round_logged = 0;
 
-SDL_Surface* splash;
 SDL_Surface* chat;
 SDL_Surface* logo;
 SDL_Surface* background;
@@ -490,9 +488,9 @@ static void log_round()
 
 #ifndef WIN32
   if(won)
-    swprintf(buf, sizeof(buf), L"*** VICTORY! Won %u of %u total.  Press enter to continue.", players[0].score, players[0].score + players[1].score);
+    swprintf(buf, sizeof(buf) / sizeof(buf[0]), L"*** VICTORY! Won %u of %u total.  Press enter to continue.", players[0].score, players[0].score + players[1].score);
   else
-    swprintf(buf, sizeof(buf), L"*** DEFEAT! Won %u of %u total.  Press enter to continue.", players[0].score, players[0].score + players[1].score);
+    swprintf(buf, sizeof(buf) / sizeof(buf[0]), L"*** DEFEAT! Won %u of %u total.  Press enter to continue.", players[0].score, players[0].score + players[1].score);
 #else
   if(won)
     swprintf(buf, L"*** VICTORY! Won %u of %u total.  Press enter to continue.", players[0].score, players[0].score + players[1].score);
@@ -1669,34 +1667,6 @@ void process_packet(struct data_packet* packet)
   }
 }
 
-void show_splash()
-{
-  SDL_Event event;
-
-  SDL_BlitSurface(splash, 0, screen, 0);
-  SDL_UpdateRect(screen, 0, 0, 0, 0);
-
-  last_tick = SDL_GetTicks();
-
-  while(SDL_GetTicks() - last_tick < 3000)
-  {
-    while(SDL_PollEvent(&event))
-    {
-      if(event.type == SDL_KEYDOWN)
-      {
-        if(event.key.keysym.sym == SDLK_ESCAPE
-        || event.key.keysym.sym == SDLK_SPACE
-        || event.key.keysym.sym == SDLK_RETURN)
-          return;
-      }
-    }
-
-    SDL_UpdateRect(screen, 0, 0, 0, 0);
-
-    Sleep(10);
-  }
-}
-
 #ifndef WIN32
 static void help(const char* argv0)
 {
@@ -1879,9 +1849,6 @@ int PASCAL WinMain(HINSTANCE instance, HINSTANCE previnstance,
 
   load_images();
   load_font();
-
-  splash = get_image("splash.png");
-  SDL_SetAlpha(splash, 0, 0);
 
   chat = get_image("chat.png");
   SDL_SetAlpha(chat, 0, 0);
@@ -2498,7 +2465,7 @@ int PASCAL WinMain(HINSTANCE instance, HINSTANCE previnstance,
 
         print_string(0, 320 + (selection == 3 ? bump : 0), 370, L"Log Out", 1);
 #ifndef WIN32
-        swprintf(buf, sizeof(buf), L"Logged in as %ls.", username);
+        swprintf(buf, sizeof(buf) / sizeof(buf[0]), L"Logged in as %ls.", username);
 #else
         swprintf(buf, L"Logged in as %ls.", username);
 #endif
@@ -2606,7 +2573,7 @@ int PASCAL WinMain(HINSTANCE instance, HINSTANCE previnstance,
         else
           message[message_cursor] = L' ';
 #ifndef WIN32
-          swprintf(buf, sizeof(buf), L"%ls", message + off);
+          swprintf(buf, sizeof(buf) / sizeof(buf[0]), L"%ls", message + off);
 #else
           swprintf(buf, L"%ls", message + off);
 #endif
@@ -2693,8 +2660,6 @@ int PASCAL WinMain(HINSTANCE instance, HINSTANCE previnstance,
 
           if(mode == MODE_MAIN_MENU || mode == MODE_MODE_SELECT || mode == MODE_SINGLEPLAYER_MENU)
           {
-            show_splash();
-
             exit(EXIT_SUCCESS);
           }
           else
@@ -2827,7 +2792,7 @@ int PASCAL WinMain(HINSTANCE instance, HINSTANCE previnstance,
               {
                 wchar_t buf[270];
 #ifndef WIN32
-                swprintf(buf, sizeof(buf), L"You: %ls", message);
+                swprintf(buf, sizeof(buf) / sizeof(buf[0]), L"You: %ls", message);
 #else
                 swprintf(buf, L"You: %ls", message);
 #endif
@@ -2874,8 +2839,6 @@ int PASCAL WinMain(HINSTANCE instance, HINSTANCE previnstance,
             }
             else if(selection == 2)
             {
-              show_splash();
-
               exit(EXIT_SUCCESS);
             }
           }
@@ -2899,8 +2862,6 @@ int PASCAL WinMain(HINSTANCE instance, HINSTANCE previnstance,
             }
             else if(selection == 2)
             {
-              show_splash();
-
               exit(EXIT_SUCCESS);
             }
           }
@@ -2923,8 +2884,6 @@ int PASCAL WinMain(HINSTANCE instance, HINSTANCE previnstance,
             }
             else if(selection == 2)
             {
-              show_splash();
-
               exit(EXIT_SUCCESS);
             }
             else if(selection == 3)

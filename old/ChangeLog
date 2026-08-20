@@ -1,3 +1,8 @@
+pengupop 2.2.6, Jan  1 2010
+
+  * Fixed potential buffer overflow in swprintf.
+  * Removed nag screen.
+
 pengupop 2.2.5, Mar 19 2009
 
   * Replaced bin2c with own version to avoid having multiple licenses.

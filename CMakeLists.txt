@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.20...4.3 FATAL_ERROR)
 
-project(pengupop VERSION 2.2.5 LANGUAGES C
+project(pengupop VERSION 2.2.6 LANGUAGES C
 	DESCRIPTION "Bust a Move/Puzzle Bobble clone"
 	HOMEPAGE_URL "https://github.com/carstene1ns/pengupop")
 

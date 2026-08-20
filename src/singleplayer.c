@@ -497,7 +497,7 @@ collide:;
       }
 
 #ifndef WIN32
-      swprintf(buf, sizeof(buf), L"%u", remaining);
+      swprintf(buf, sizeof(buf) / sizeof(buf[0]), L"%u", remaining);
 #else
       swprintf(buf, L"%u", remaining);
 #endif
@@ -529,7 +529,7 @@ collide:;
       if(level != 255)
       {
 #ifndef WIN32
-        swprintf(buf, sizeof(buf), L"Level %u", level + 1);
+        swprintf(buf, sizeof(buf) / sizeof(buf[0]), L"Level %u", level + 1);
 #else
         swprintf(buf, L"Level %u", level + 1);
 #endif
