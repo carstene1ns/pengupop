@@ -1,0 +1,17 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:recommended"
+  ],
+  "packageRules": [
+    {
+      "description": "Group dependencies from GitHub Actions",
+      "matchFileNames": [".github/workflows/*"],
+      "groupName": "All GitHub Actions changes",
+      "groupSlug": "update-dependencies"
+    }
+  ],
+  "rangeStrategy" : "in-range-only",
+  "labels": ["dependencies"],
+  "schedule": "monthly"
+}
