@@ -1,0 +1,333 @@
+name: CI
+
+on:
+  push:
+    branches: [main, feature/**, bugfix/**, pr/**]
+    tags:
+      - v[0-9].[0-9].[0-9]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  prepare:
+    name: General preparations
+    runs-on: ubuntu-latest
+    steps:
+      - &common_checkout
+        name: Checkout
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+      - name: Get version, tag and pull request info
+        id: vars
+        run: |
+          pull="no"
+          if [[ "${{ github.ref }}" == refs/heads/* ]]; then
+            # branch build
+            version="$(git describe --tags --exclude continuous --long --always "$GITHUB_SHA")"
+          elif [[ "${{ github.ref }}" == refs/pull/* ]]; then
+            # pull request
+            pull="yes"
+            version="pull${{ github.event.number }}"
+          else
+            # tag
+            version="${{ github.ref_name }}"
+          fi
+          echo "version=${version}" >> $GITHUB_OUTPUT
+          echo "pull=${pull}" >> $GITHUB_OUTPUT
+      - name: Check version, tag and pull request info
+        run: |
+          echo "version = ${{ steps.vars.outputs.version }}"
+          echo "pull = ${{ steps.vars.outputs.pull }}"
+    outputs:
+      version: ${{ steps.vars.outputs.version }}
+      pull: ${{ steps.vars.outputs.pull }}
+
+  dist:
+    name: Distribution archives
+    needs: prepare
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install dependencies
+        run: |
+          sudo apt-get update -yqq
+          sudo apt-get install -yqq git
+
+      - *common_checkout
+
+      - name: Generate Archives
+        env:
+          VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          git archive -o pengupop-${VERSION}.tar.gz --prefix=pengupop-${VERSION}/ ${GITHUB_SHA}
+          git archive -o pengupop-${VERSION}.zip --prefix=pengupop-${VERSION}/ ${GITHUB_SHA}
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: pengupop-dist
+          path: |
+            pengupop-*.tar.gz
+            pengupop-*.zip
+
+  linux-appimage:
+    name: Build (Linux x86_64, AppImage)
+    needs: prepare
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Install dependencies
+        run: |
+          sudo apt-get update -yqq
+          sudo apt-get install -yqq cmake ninja-build patchelf
+
+      - &common_setup_sdl
+        uses: libsdl-org/setup-sdl@main
+        id: sdl
+        with:
+          install-linux-dependencies: true
+          version: 3-latest
+          build-type: Release
+          add-to-environment: true
+          cmake-generator: Ninja
+
+      - *common_checkout
+
+      - name: Build Pengupop
+        run: |
+          cmake -B build-release . -G Ninja -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_INSTALL_PREFIX=/usr #-DAPPIMAGE=ON
+          cmake --build build-release
+
+      - name: Install into AppDir
+        run: DESTDIR=AppDir/ cmake --install build-release
+
+      - name: Download linuxdeploy and appimagetool
+        run: |
+          curl -fsSL https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage -o linuxdeploy
+          curl -fsSL https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage -o appimagetool
+          chmod +x linuxdeploy appimagetool
+
+      - name: Bundle libraries and create AppImage
+        env:
+          VERSION: ${{ needs.prepare.outputs.version }}
+          APPIMAGE_EXTRACT_AND_RUN: 1
+          NO_STRIP: 1
+        run: |
+          ./linuxdeploy --appdir AppDir \
+            --desktop-file AppDir/usr/share/applications/pengupop.desktop \
+            --icon-file AppDir/usr/share/icons/hicolor/48x48/apps/pengupop.png
+          ./appimagetool --no-appstream AppDir pengupop-${VERSION}-linux64.AppImage
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: pengupop-linux-appimage-x86_64
+          path: pengupop-*.AppImage
+
+  windows-mingw-gcc:
+    name: Build (Windows x86_64, MinGW, GCC)
+    needs: prepare
+    runs-on: windows-2022
+    defaults:
+      run:
+        shell: msys2 {0}
+    steps:
+      - uses: msys2/setup-msys2@v2
+        with:
+          update: true
+          install: |
+            base-devel zip
+          pacboy: |
+            toolchain:p cmake:p ninja:p zlib:p
+
+      - *common_setup_sdl
+
+      - *common_checkout
+
+      - name: Build Pengupop
+        run: |
+          cmake -B build-release . -G Ninja -DCMAKE_BUILD_TYPE=Release
+          cmake --build build-release
+
+      - name: Prepare artifact
+        env:
+          VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          cmake --install build-release --prefix $PWD
+          cp README.md COPYING dist/
+          mv dist pengupop-${VERSION}
+          zip -r pengupop-${VERSION}-win64.zip pengupop-${VERSION}
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: pengupop-windows-mingw-x86_64
+          path: pengupop-*.zip
+
+  web-emscripten:
+    if: false # disabled for now, no emscripten config in CMakeLists.txt yet
+    name: Build (Emscripten)
+    needs: prepare
+    runs-on: ubuntu-latest
+    container: emscripten/emsdk
+    steps:
+      - name: Install dependencies
+        run: |
+          sudo apt-get update -yqq
+          sudo apt-get install -yqq build-essential cmake ninja-build
+
+      - *common_checkout
+
+      - name: Build Pengupop
+        run: |
+          emcmake cmake -B build-web . -G Ninja -DCMAKE_BUILD_TYPE=Release
+          cmake --build build-web
+          ls -l build-web/pengupop*
+
+      - name: Prepare artifact
+        env:
+          VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          mkdir pengupop-${VERSION}
+          cp build-web/*.{wasm,js,html,data} README.md COPYING pengupop-${VERSION}/
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: pengupop-web
+          path: pengupop-*/
+
+  # github pages
+
+  prepare-pages:
+    name: Prepare emscripten artifact
+    needs: web-emscripten
+    # run only on main branch in main repo
+    if: ${{ github.ref == 'refs/heads/main' && github.repository_owner == 'carstene1ns' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download artifacts
+        uses: actions/download-artifact@v8
+        with:
+          name: pengupop-web
+          path: web
+
+      - name: Prepare site
+        run: |
+          mkdir -p _site
+          # disable jekyll
+          touch _site/.nojekyll
+          mv web/pengupop-*/*.{wasm,js,html,data} _site
+          # autostart
+          ln -s pengupop.html _site/index.html
+
+      - name: Upload artifact to GitHub pages
+        uses: actions/upload-pages-artifact@v5
+
+  deploy-pages:
+    name: Deploy GitHub Pages site
+    needs: prepare-pages
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v5
+
+  # releases
+
+  prerelease:
+    name: Create Pre-release
+    needs:
+      # all
+      - dist
+      - linux-appimage
+      - windows-mingw-gcc
+      #- web-emscripten
+    # allow run when some platform jobs failed, but only on main branch in main repo
+    if: ${{ !cancelled() && github.ref == 'refs/heads/main' && needs.prepare.outputs.tag == '' && github.repository_owner == 'carstene1ns' }}
+    runs-on: ubuntu-latest
+    steps:
+      #- name: Checkout
+      #  uses: actions/checkout@v7
+      #  with:
+      #    path: repo
+
+      - name: Download artifacts
+        uses: actions/download-artifact@v8
+
+      - name: Prepare artifacts and inspect directory
+        run: |
+          tree -aL 2
+
+      - name: Advance tag to recent commit
+        uses: actions/github-script@v9
+        with:
+          script: |
+            try {
+              await github.rest.git.deleteRef({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                ref: "tags/continuous"
+              })
+            } catch (e) {
+              console.log("The 'continuous' tag does not exist.", e)
+            }
+            try {
+              await github.rest.git.createRef({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                ref: "refs/tags/continuous",
+                sha: context.sha
+              })
+            } catch (e) {
+              console.log("Unable to create 'continuous' tag.", e)
+            }
+
+      - name: Create CHANGELOG to add disclaimer
+        run: |
+          echo "This is an automated development snapshot, for testing only." > CHANGELOG.md
+          #echo "Using the latest official release might be more stable." >> CHANGELOG.md
+          echo "" >> CHANGELOG.md
+
+      #- name: Fill CHANGELOG with commit info
+      #  id: changelog
+      #  uses: requarks/changelog-action@v1
+      #  with:
+      #    token: ${{ github.token }}
+      #    tag: continuous
+      #    writeToFile: true
+      #    excludeTypes: chore,style
+      #    includeInvalidCommits: true
+
+      - name: Create/Update Pre-release and upload artifacts
+        id: prerelease
+        uses: ncipollo/release-action@v1
+        with:
+          prerelease: true
+          tag: continuous
+          allowUpdates: true
+          removeArtifacts: true
+          bodyFile: CHANGELOG.md
+          generateReleaseNotes: true
+          artifacts: pengupop-*/*
+
+      - name: Display information about Pre-release
+        run: |
+          echo "Created/Updated release with URL: ${{ steps.prerelease.outputs.html_url }}"
