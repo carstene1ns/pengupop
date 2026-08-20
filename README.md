@@ -22,3 +22,4 @@ GPL3
 
 * Jørgen Jacobsen (Graphics)
 * Morten Hustveit (Code)
+* Carsten Teibes (SDL3 port)

@@ -11,3 +11,4 @@
 ## Patch contributors:
 
 * Mo Maison <momaison@yahoo.fr> (Better text editing in lounge)
+* Carsten Teibes <carsten f4ke.de> (SDL3 port)

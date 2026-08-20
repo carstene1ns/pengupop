@@ -306,15 +306,15 @@ jobs:
           #echo "Using the latest official release might be more stable." >> CHANGELOG.md
           echo "" >> CHANGELOG.md
 
-      #- name: Fill CHANGELOG with commit info
-      #  id: changelog
-      #  uses: requarks/changelog-action@v1
-      #  with:
-      #    token: ${{ github.token }}
-      #    tag: continuous
-      #    writeToFile: true
-      #    excludeTypes: chore,style
-      #    includeInvalidCommits: true
+      - name: Fill CHANGELOG with commit info
+        id: changelog
+        uses: requarks/changelog-action@v1
+        with:
+          token: ${{ github.token }}
+          tag: continuous
+          writeToFile: true
+          excludeTypes: chore,style
+          includeInvalidCommits: true
 
       - name: Create/Update Pre-release and upload artifacts
         id: prerelease
