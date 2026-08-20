@@ -64,6 +64,8 @@ extern int sound_enable;
 
 extern unsigned int rng_seed;
 
+void remove_bubble(struct player_state* p, int x, int y, int evil);
+
 int stick(struct player_state* p, int bx, int by, int color);
 void mark_dirty(struct player_state* p, int x, int y, int width, int height);
 void cond_blit(struct player_state* p, SDL_Surface* source, SDL_Rect* source_rect, SDL_Surface* dest, SDL_Rect* dest_rect);

@@ -28,6 +28,7 @@
 #ifndef WIN32
 #include <unistd.h>
 #include <fcntl.h>
+#include <wchar.h>
 #else
 #include <windows.h>
 #endif

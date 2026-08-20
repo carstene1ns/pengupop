@@ -74,9 +74,6 @@ static struct option long_options[] =
 
 extern void play_single_player();
 
-#ifndef swprintf
-int swprintf(wchar_t *wcs, size_t maxlen, const wchar_t *format, ...);
-#endif
 #endif
 
 int hwalpha;
@@ -1842,7 +1839,7 @@ int PASCAL WinMain(HINSTANCE instance, HINSTANCE previnstance,
 
     case 'v':
 
-      printf("%s\n", PACKAGE_STRING);
+      printf("pengupop %s\n", VERSION);
       printf(
         "Copyright (C) 2006 Junoplay\n"
         "This is free software.  You may redistribute copies of it under the terms of\n"
