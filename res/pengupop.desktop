@@ -1,11 +1,10 @@
 [Desktop Entry]
 Version=1.0
-Encoding=UTF-8
+Type=Application
 Name=Pengupop
 Comment=Networked Game in the vein of Move/Puzzle Bobble
 Exec=pengupop
+Icon=pengupop
+Categories=Game;ArcadeGame;
 StartupNotify=false
 Terminal=false
-Type=Application
-Icon=pengupop.png
-Categories=Application;Game;ArcadeGame;

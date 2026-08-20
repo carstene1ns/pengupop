@@ -1,0 +1,7 @@
+# CMake
+build/
+build-*/
+
+# packages
+*.tar.*
+*.zip
