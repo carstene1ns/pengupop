@@ -1,0 +1,11 @@
+* text=auto
+
+*.md text
+*.txt text
+*.cmake text
+
+*.c text
+*.h text
+
+# distribution archives
+/.github export-ignore

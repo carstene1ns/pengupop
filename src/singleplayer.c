@@ -15,15 +15,17 @@
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-#include <SDL/SDL.h>
+#include <SDL3/SDL.h>
 
 #include <math.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <limits.h>
 
 #include "common.h"
 #include "sound.h"
+#include "gfx.h"
 
 #ifndef WIN32
 #include <unistd.h>
@@ -61,7 +63,7 @@ enum game_mode
   GM_INV_GRAVITY, /* Balls are affected by gravity, upwards */
 };
 
-#include "singleplayer_levels.c"
+#include "singleplayer_levels.h"
 
 static int random_bubble(struct player_state* p)
 {
@@ -141,7 +143,7 @@ static void init_field()
 
 static void game_tick(int paint)
 {
-  int i, j, k;
+  int i, j;
   int yoff, xoff;
   int bx, by;
   SDL_Rect rect;
@@ -158,7 +160,7 @@ static void game_tick(int paint)
 
   if(level == 255)
   {
-    k = 0;
+    int k = 0;
 
     for(i = 0; i < field_height; ++i)
     {
@@ -169,7 +171,7 @@ static void game_tick(int paint)
       }
     }
 
-    for(i = 0; i < sizeof(p.mbubbles) / sizeof(p.mbubbles[0]); ++i)
+    for(size_t i = 0; i < sizeof(p.mbubbles) / sizeof(p.mbubbles[0]); ++i)
     {
       if(p.mbubbles[i].color && !p.mbubbles[i].falling)
         ++k;
@@ -184,7 +186,7 @@ static void game_tick(int paint)
     }
   }
 
-  for(k = 0; k < sizeof(p.mbubbles) / sizeof(p.mbubbles[0]); ++k)
+  for(size_t k = 0; k < sizeof(p.mbubbles) / sizeof(p.mbubbles[0]); ++k)
   {
     struct moving_bubble* b = &p.mbubbles[k];
 
@@ -212,16 +214,14 @@ static void game_tick(int paint)
         b->x = -b->x;
         b->velx = -b->velx;
 
-        if(sound_enable)
-          sounds[2].pos = 0;
+        sound_play(SFX_REBOUND);
       }
       else if(b->x > max_x)
       {
         b->x = 2 * max_x - b->x;
         b->velx = -b->velx;
 
-        if(sound_enable)
-          sounds[2].pos = 0;
+        sound_play(SFX_REBOUND);
       }
 
       for(i = -1; i < field_height; ++i)
@@ -281,27 +281,23 @@ static void game_tick(int paint)
 
             if(by > 11)
             {
-              int a, b;
-
-              for(a = 0; a < field_height; ++a)
-                for(b = 0; b < WIDTH(a); ++b)
+              for(int a = 0; a < field_height; ++a)
+                for(int b = 0; b < WIDTH(a); ++b)
                   remove_bubble(&p, b, a, 0);
 
               state = GS_PINK;
 
-              for(a = 0; a < sizeof(p.mbubbles) / sizeof(p.mbubbles[0]); ++a)
+              for(size_t a = 0; a < sizeof(p.mbubbles) / sizeof(p.mbubbles[0]); ++a)
                 p.mbubbles[a].falling = 1;
             }
             else
             {
               if(stick(&p, bx, by, b->color))
               {
-                int a;
-
                 if(level != 255)
                   state = GS_SHINE_GET;
 
-                for(a = 0; a < sizeof(p.mbubbles) / sizeof(p.mbubbles[0]); ++a)
+                for(size_t a = 0; a < sizeof(p.mbubbles) / sizeof(p.mbubbles[0]); ++a)
                   p.mbubbles[a].falling = 1;
               }
 
@@ -338,7 +334,7 @@ collide:;
       SDL_BlitSurface(spbg, &rect, screen, &rect);
     }
 
-    for(i = 0; i < sizeof(p.mbubbles) / sizeof(p.mbubbles[0]); ++i)
+    for(size_t i = 0; i < sizeof(p.mbubbles) / sizeof(p.mbubbles[0]); ++i)
     {
       if(p.mbubbles[i].lastpaintx == INT_MIN)
         continue;
@@ -450,7 +446,7 @@ collide:;
     p.dirty_maxx = 0;
     p.dirty_maxy = 0;
 
-    for(i = 0; i < sizeof(p.mbubbles) / sizeof(p.mbubbles[0]); ++i)
+    for(size_t i = 0; i < sizeof(p.mbubbles) / sizeof(p.mbubbles[0]); ++i)
     {
       if(!p.mbubbles[i].color)
         continue;
@@ -496,11 +492,7 @@ collide:;
         }
       }
 
-#ifndef WIN32
-      swprintf(buf, sizeof(buf) / sizeof(buf[0]), L"%u", remaining);
-#else
-      swprintf(buf, L"%u", remaining);
-#endif
+      swprintf(buf, ARRAY_SIZE(buf), L"%u", remaining);
 
       SET_RECT(rect, 355, 104, 256, 128);
 
@@ -528,11 +520,7 @@ collide:;
 
       if(level != 255)
       {
-#ifndef WIN32
-        swprintf(buf, sizeof(buf) / sizeof(buf[0]), L"Level %u", level + 1);
-#else
-        swprintf(buf, L"Level %u", level + 1);
-#endif
+        swprintf(buf, ARRAY_SIZE(buf), L"Level %u", level + 1);
         print_string(0, 483, 264, buf, 1);
       }
       else
@@ -580,15 +568,15 @@ void play_single_player()
       {
         switch(event.type)
         {
-        case SDL_QUIT:
+        case SDL_EVENT_QUIT:
 
           exit(EXIT_SUCCESS);
 
           break;
 
-        case SDL_KEYDOWN:
+        case SDL_EVENT_KEY_DOWN:
 
-          switch(event.key.keysym.sym)
+          switch(event.key.key)
           {
           case SDLK_ESCAPE:
 
@@ -623,7 +611,7 @@ void play_single_player()
                 snprintf(str, sizeof(str), "%d", (level ^ 0x7236143));
                 str[63] = 0;
 
-                RegSetValueEx(k_config, "bananas", 0, REG_SZ, str, strlen(str));
+                RegSetValueEx(k_config, "bananas", 0, REG_SZ, (const BYTE *) str, strlen(str));
               }
             }
 #endif
@@ -662,20 +650,14 @@ void play_single_player()
 
           case 's':
 
-            sound_enable = !sound_enable;
+            sound_enabled = !sound_enabled;
 
             break;
 
           case 'f':
 
-#ifndef WIN32
-            SDL_WM_ToggleFullScreen(screen);
-#else
-            if(fullscreen)
-              screen = SDL_SetVideoMode(width, height, 0, SDL_SWSURFACE);
-            else
-              screen = SDL_SetVideoMode(width, height, 0, SDL_SWSURFACE | SDL_FULLSCREEN);
-
+            GFX_ToggleFullScreen();
+#if 0
             SDL_BlitSurface(spbg, 0, screen, 0);
 
             p.dirty_minx = 0;
@@ -683,7 +665,6 @@ void play_single_player()
             p.dirty_maxx = max_field_width * 32;
             p.dirty_maxy = 440;
 #endif
-            fullscreen = !fullscreen;
 
             break;
 
@@ -692,9 +673,9 @@ void play_single_player()
 
           break;
 
-        case SDL_KEYUP:
+        case SDL_EVENT_KEY_UP:
 
-          switch(event.key.keysym.sym)
+          switch(event.key.key)
           {
           case SDLK_LEFT:
 
@@ -719,7 +700,7 @@ void play_single_player()
 
       if(p.evil_bubble_count && !next_evil)
       {
-        int i = 0;
+        size_t i = 0;
 
         while(p.evil_bubble_count && i < sizeof(p.mbubbles) / sizeof(p.mbubbles[0]))
         {
@@ -753,7 +734,7 @@ void play_single_player()
       if(next_evil)
         --next_evil;
 
-      SDL_UpdateRect(screen, 0, 0, 0, 0);
+      GFX_UpdateScreen();
     }
 
     Uint32 message_until = now + 2000;
@@ -767,11 +748,11 @@ void play_single_player()
 
       while(SDL_PollEvent(&event))
       {
-        if(event.type == SDL_KEYDOWN)
+        if(event.type == SDL_EVENT_KEY_DOWN)
         {
-          if(event.key.keysym.sym == SDLK_ESCAPE
-          || event.key.keysym.sym == SDLK_SPACE
-          || event.key.keysym.sym == SDLK_RETURN)
+          if(event.key.key == SDLK_ESCAPE
+          || event.key.key == SDLK_SPACE
+          || event.key.key == SDLK_RETURN)
             message_until = now;
         }
       }
@@ -790,7 +771,7 @@ void play_single_player()
       if(now > message_until)
         break;
 
-      SDL_UpdateRect(screen, 0, 0, 0, 0);
+      GFX_UpdateScreen();
     }
 
     if(state == GS_SHINE_GET)
@@ -806,11 +787,11 @@ void play_single_player()
 
         while(SDL_PollEvent(&event))
         {
-          if(event.type == SDL_KEYDOWN)
+          if(event.type == SDL_EVENT_KEY_DOWN)
           {
-            if(event.key.keysym.sym == SDLK_ESCAPE
-            || event.key.keysym.sym == SDLK_SPACE
-            || event.key.keysym.sym == SDLK_RETURN)
+            if(event.key.key == SDLK_ESCAPE
+            || event.key.key == SDLK_SPACE
+            || event.key.key == SDLK_RETURN)
               return;
           }
         }
@@ -820,7 +801,7 @@ void play_single_player()
         print_string(0, 320, 250, L"Congratulations!", 1);
         print_string(0, 320, 290, L"That was all", 1);
 
-        SDL_UpdateRect(screen, 0, 0, 0, 0);
+        GFX_UpdateScreen();
       }
 
       return;

@@ -1,3 +1,8 @@
+#include <stddef.h>
+#include <stdint.h>
+#include <stdbool.h>
+#include <SDL3/SDL.h>
+
 struct moving_bubble
 {
   float x;
@@ -40,7 +45,7 @@ struct player_state
   unsigned int evil_bubble_seed;
 };
 
-extern int time_stepms;
+extern Uint32 time_stepms;
 extern float time_step;
 static const int field_height = 14;
 static const int max_field_width = 8;
@@ -50,17 +55,10 @@ static const int max_x = 414 - 190;
 
 #define SET_RECT(r, xv, yv, wv, hv) do { (r).x = (xv); (r).y = (yv); (r).w = (wv); (r).h = (hv); } while(0)
 
-extern SDL_Surface* screen;
+#define ARRAY_SIZE(a) (sizeof((a))/sizeof((a)[0]))
 
-extern SDL_Surface* logo;
-extern SDL_Surface* background;
 extern SDL_Surface* base[129];
 extern SDL_Surface* bubbles[8];
-
-static const int width = 640;
-static const int height = 480;
-extern int fullscreen;
-extern int sound_enable;
 
 extern unsigned int rng_seed;
 
@@ -72,6 +70,7 @@ void cond_blit(struct player_state* p, SDL_Surface* source, SDL_Rect* source_rec
 void show_splash();
 void shoot(struct player_state* p, int color, int velocity);
 void init_player(struct player_state* p);
+void play_single_player();
 
 unsigned int rng();
 

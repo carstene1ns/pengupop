@@ -1,20 +1,36 @@
-#ifndef SOUND_H_
-#define SOUND_H_ 1
+/*
+    Copyright (C) 2006  Morten Hustveit <morten@rashbox.org>
 
-struct sound
-{
-  SDL_AudioSpec spec;
-  Uint8* buf;
-  Uint32 len;
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
 
-  Uint32 pos;
-};
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
 
-extern struct sound sounds[4];
-extern SDL_AudioSpec sdl_audio;
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
 
-void load_sounds();
+#ifndef SOUND_H
+#define SOUND_H
 
-void SDLCALL sound_callback(void* userdata, Uint8* stream, int len);
+typedef enum {
+    SFX_DESTROY = 0,
+    SFX_LAUNCH,
+    SFX_REBOUND,
+    SFX_STICK,
+    SFX_MAX
+} sfx;
 
-#endif /* SOUND_H_ */
+extern bool sound_enabled;
+
+extern void init_sound();
+extern void deinit_sound();
+
+extern void sound_play(sfx snd);
+
+#endif

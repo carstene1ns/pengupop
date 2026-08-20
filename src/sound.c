@@ -15,7 +15,7 @@
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-#include <SDL/SDL.h>
+#include <SDL3/SDL.h>
 
 #include "destroy_group.h"
 #include "launch.h"
@@ -24,26 +24,75 @@
 
 #include "sound.h"
 
-SDL_AudioSpec sdl_audio;
-struct sound sounds[4];
-
-void load_sounds()
+typedef struct sound_s
 {
-  int i;
+  SDL_AudioSpec spec;
+  Uint8* buf;
+  Uint32 len;
 
-  SDL_LoadWAV_RW(SDL_RWFromMem(destroy_group, size_destroy_group), 1,
-                 &sounds[0].spec, &sounds[0].buf, &sounds[0].len);
+  Uint32 pos;
+} sound;
+sound sounds[4];
 
-  SDL_LoadWAV_RW(SDL_RWFromMem(launch, size_launch), 1,
-                 &sounds[1].spec, &sounds[1].buf, &sounds[1].len);
+bool sound_enabled = true, sound_working = true;
+SDL_AudioSpec sdl_audio;
+SDL_AudioStream *stream;
 
-  SDL_LoadWAV_RW(SDL_RWFromMem(rebound, size_rebound), 1,
-                 &sounds[2].spec, &sounds[2].buf, &sounds[2].len);
+static void SDLCALL audio_callback(void */*userdata*/, SDL_AudioStream *stream,
+  int additional_amount, int /*total_amount*/)
+{
+  if (additional_amount > 0)
+  {
+    Uint8 *data = SDL_stack_alloc(Uint8, additional_amount);
+    if (data)
+    {
+      signed short* sample = (signed short*) data;
+      int len = additional_amount / 2;
 
-  SDL_LoadWAV_RW(SDL_RWFromMem(stick, size_stick), 1,
-                 &sounds[3].spec, &sounds[3].buf, &sounds[3].len);
+      for(int i = 0; i < len; i++, sample++)
+      {
+        int val = 0;
 
-  for(i = 0; i < 4; ++i)
+        for(int j = 0; j < SFX_MAX; j++)
+        {
+          if(sounds[j].pos < sounds[j].len)
+          {
+            val += *((signed short*) &sounds[j].buf[sounds[j].pos]);
+            sounds[j].pos += 2;
+          }
+        }
+
+        // clipping
+        if(val < -32768)
+          *sample = -32768;
+        else if(val > 32767)
+          *sample = 32767;
+        else
+          *sample = val;
+      }
+
+      SDL_PutAudioStreamData(stream, data, additional_amount);
+      SDL_stack_free(data);
+    }
+  }
+}
+
+static void load_sounds()
+{
+  const unsigned char *datas[] = { destroy_group, launch, rebound, stick };
+  size_t sizes[] = { size_destroy_group, size_launch, size_rebound, size_stick };
+
+  for(int i = 0; i < SFX_MAX; i++)
+  {
+    if(!SDL_LoadWAV_IO(SDL_IOFromConstMem(datas[i], sizes[i]), true,
+      &sounds[i].spec, &sounds[i].buf, &sounds[i].len))
+    {
+      sound_working = false;
+      return;
+    }
+  }
+
+  for(int i = 0; i < SFX_MAX; i++)
   {
 #if SDL_BYTEORDER == SDL_BIG_ENDIAN
     swab(sounds[i].buf, sounds[i].buf, sounds[i].len);
@@ -52,33 +101,38 @@ void load_sounds()
   }
 }
 
-void SDLCALL sound_callback(void* userdata, Uint8* stream, int len)
-{
-  int i, j;
-  int val;
-  signed short* sample = (signed short*) stream;
+void init_sound() {
+  sdl_audio.freq = 44100;
+  sdl_audio.format = SDL_AUDIO_S16;
+  sdl_audio.channels = 1;
 
-  len /= 2;
+  stream = SDL_OpenAudioDeviceStream(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK,
+    &sdl_audio, audio_callback, NULL);
+  if (!stream) {
+      sound_working = false;
+      return;
+  }
 
-  for(i = 0; i < len; ++i, ++sample)
+  load_sounds();
+
+  if(!sound_working) {
+    return;
+  }
+  SDL_ResumeAudioStreamDevice(stream);
+}
+
+void deinit_sound() {
+  SDL_DestroyAudioStream(stream);
+
+  for(int i = 0; i < SFX_MAX; i++)
   {
-    val = 0;
-
-    for(j = 0; j < 4; ++j)
-    {
-      if(sounds[j].pos < sounds[j].len)
-      {
-        val += *((signed short*) &sounds[j].buf[sounds[j].pos]);
-        sounds[j].pos += 2;
-      }
-    }
-
-    if(val < -32768)
-      *sample = -32768;
-    else if(val > 32767)
-      *sample = 32767;
-    else
-      *sample = val;
+    SDL_free(sounds[i].buf);
   }
 }
 
+void sound_play(sfx snd) {
+  if(!sound_enabled) return;
+  if(snd < 0 || snd >= SFX_MAX) return;
+
+  sounds[snd].pos = 0;
+}

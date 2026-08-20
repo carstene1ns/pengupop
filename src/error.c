@@ -15,10 +15,7 @@
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-#if WIN32
-#define WIN32_LEAN_AND_MEAN
-#include <windows.h>
-#endif
+#include <SDL3/SDL.h>
 
 #include <stdarg.h>
 #include <stdio.h>
@@ -26,33 +23,19 @@
 
 #include "error.h"
 
-void info(const char* format, ...)
-{
-  va_list args;
-
-  va_start(args, format);
-
-  vfprintf(stderr, format, args);
-  fwrite("\n", 1, 1, stderr);
-}
-
 void fatal_error(const char* format, ...)
 {
   va_list args;
-
-  va_start(args, format);
-
-#if WIN32
   char buf[512];
 
+  va_start(args, format);
   vsnprintf(buf, sizeof(buf), format, args);
   buf[sizeof(buf) - 1] = 0;
 
-  MessageBox(0, buf, "Fatal Error", MB_OK | MB_ICONEXCLAMATION);
-#else
-  vfprintf(stderr, format, args);
-  fwrite("\n", 1, 1, stderr);
-#endif
+  if(!SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Pengupop", buf, NULL /*window*/)) {
+    fwrite(buf, sizeof(buf), 1, stderr);
+    fwrite("\n", 1, 1, stderr);
+  }
 
   exit(EXIT_FAILURE);
 }

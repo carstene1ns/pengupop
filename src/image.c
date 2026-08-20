@@ -15,7 +15,7 @@
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-#include <SDL/SDL.h>
+#include <SDL3/SDL.h>
 #include <zlib.h>
 
 #include <assert.h>
@@ -27,6 +27,7 @@
 
 #include "error.h"
 #include "images.h"
+#include "gfx.h"
 
 static struct
 {
@@ -115,7 +116,7 @@ static void rotate(unsigned char* dest, unsigned char* src, int width, int heigh
 
 void load_images()
 {
-  uint32_t i, j, x, y;
+  uint32_t i, j;
   SDL_Surface* s;
   z_stream input;
 
@@ -181,21 +182,17 @@ void load_images()
         infos[image_count].width = infos[i].width;
         infos[image_count].height = infos[i].height;
 
-#if SDL_BYTEORDER == SDL_LIL_ENDIAN
-        s = SDL_CreateRGBSurface(SDL_SRCALPHA, infos[i].width, infos[i].height, 32, 0x000000ff, 0x0000ff00, 0x00ff0000, 0xff000000);
-#else
-        s = SDL_CreateRGBSurface(SDL_SRCALPHA, infos[i].width, infos[i].height, 32, 0xff000000, 0x00ff0000, 0x0000ff00, 0x000000ff);
-#endif
+        s = GFX_CreateRGBSurface(infos[i].width, infos[i].height);
 
         surfaces[image_count] = s;
 
-        SDL_LockSurface(s);
+        if (SDL_MUSTLOCK(s)) SDL_LockSurface(s);
 
-        for(y = 0; y < s->h; ++y)
+        for(int y = 0; y < s->h; ++y)
         {
           dest = (unsigned char*) s->pixels + y * s->pitch;
 
-          for(x = 0; x < s->w * 4; x += 4)
+          for(int x = 0; x < s->w * 4; x += 4)
           {
             dest[x] = tmp[y * s->w * 4 + x];
             dest[x + 1] = tmp[y * s->w * 4 + x + 1];
@@ -204,7 +201,7 @@ void load_images()
           }
         }
 
-        SDL_UnlockSurface(s);
+        if (SDL_MUSTLOCK(s)) SDL_UnlockSurface(s);
 
         ++image_count;
       }
@@ -212,21 +209,17 @@ void load_images()
       free(tmp);
     }
 
-#if SDL_BYTEORDER == SDL_LIL_ENDIAN
-    s = SDL_CreateRGBSurface(SDL_SRCALPHA, infos[i].width, infos[i].height, 32, 0x000000ff, 0x0000ff00, 0x00ff0000, 0xff000000);
-#else
-    s = SDL_CreateRGBSurface(SDL_SRCALPHA, infos[i].width, infos[i].height, 32, 0xff000000, 0x00ff0000, 0x0000ff00, 0x000000ff);
-#endif
+    s = GFX_CreateRGBSurface(infos[i].width, infos[i].height);
 
     surfaces[i] = s;
 
-    SDL_LockSurface(s);
+    if (SDL_MUSTLOCK(s)) SDL_LockSurface(s);
 
-    for(y = 0; y < s->h; ++y)
+    for(int y = 0; y < s->h; ++y)
     {
       dest = (unsigned char*) s->pixels + y * s->pitch;
 
-      for(x = 0; x < s->w * 4; x += 4)
+      for(int x = 0; x < s->w * 4; x += 4)
       {
         dest[x] = data[y * s->w * 4 + x];
         dest[x + 1] = data[y * s->w * 4 + x + 1];
@@ -235,7 +228,7 @@ void load_images()
       }
     }
 
-    SDL_UnlockSurface(surfaces[i]);
+    if (SDL_MUSTLOCK(s)) SDL_UnlockSurface(surfaces[i]);
 
     free(data);
   }

@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.20...4.3 FATAL_ERROR)
 
-project(pengupop VERSION 2.2.6 LANGUAGES C
+project(pengupop VERSION 2.2.7 LANGUAGES C
 	DESCRIPTION "Bust a Move/Puzzle Bobble clone"
 	HOMEPAGE_URL "https://github.com/carstene1ns/pengupop")
 
@@ -32,14 +32,15 @@ databuilder(snd/rebound.wav rebound.h rebound)
 databuilder(snd/stick.wav stick.h stick)
 
 # executable
-add_executable(pengupop WIN32
+add_executable(pengupop
 	src/common.h
 	src/error.c src/error.h
 	src/font.c
-	src/gameid.c
+	src/gfx.c src/gfx.h
 	src/image.c
 	src/packet.h
-	src/singleplayer.c # includes src/singleplayer_levels.c
+	src/singleplayer.c
+	src/singleplayer_levels.h
 	src/sound.c src/sound.h
 	src/main.c
 	${CMAKE_CURRENT_BINARY_DIR}/images.h
@@ -50,14 +51,20 @@ add_executable(pengupop WIN32
 	${CMAKE_CURRENT_BINARY_DIR}/rebound.h
 	${CMAKE_CURRENT_BINARY_DIR}/stick.h)
 target_compile_definitions(pengupop PRIVATE VERSION="v${PROJECT_VERSION}")
-target_compile_options(pengupop PRIVATE -Wall -Wextra)
 target_include_directories(pengupop PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
+target_compile_options(pengupop PRIVATE -Wall -Wextra)
+if(WIN32)
+	set_target_properties(pengupop PROPERTIES WIN32_EXECUTABLE TRUE)
+	target_compile_definitions(pengupop PRIVATE WIN32_LEAN_AND_MEAN NOMINMAX)
+endif()
 
 # external libs
-find_package(SDL REQUIRED)
+find_package(SDL3 REQUIRED CONFIG)
 find_package(ZLIB REQUIRED)
-target_link_libraries(pengupop PRIVATE SDL::SDL ZLIB::ZLIB)
-if(UNIX)
+target_link_libraries(pengupop PRIVATE SDL3::SDL3 ZLIB::ZLIB)
+if(WIN32)
+	target_link_libraries(pengupop PRIVATE ws2_32)
+elseif(UNIX)
 	target_link_libraries(pengupop PRIVATE m)
 endif()
 
@@ -73,7 +80,7 @@ if(WIN32)
 			RESOLVED_DEPENDENCIES_VAR _r_deps
 			UNRESOLVED_DEPENDENCIES_VAR _u_deps
 			DIRECTORIES
-				$<TARGET_FILE_DIR:SDL::SDL>
+				$<TARGET_FILE_DIR:SDL3::SDL3>
 				$<TARGET_FILE_DIR:ZLIB::ZLIB>
 		)
 		foreach(_file ${_r_deps})

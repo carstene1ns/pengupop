@@ -15,6 +15,9 @@
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+#ifndef SP_LEVELS_H
+#define SP_LEVELS_H
+
 static struct
 {
   enum game_mode mode;
@@ -4246,3 +4249,5 @@ static struct
     },
   }
 };
+
+#endif

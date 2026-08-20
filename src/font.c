@@ -15,9 +15,8 @@
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-#include <SDL/SDL.h>
+#include <SDL3/SDL.h>
 
-#include <errno.h>
 #include <stdio.h>
 #include <string.h>
 #include <wchar.h>
@@ -31,6 +30,7 @@
 #include "font_16.h"
 #include "font_32.h"
 #include "error.h"
+#include "gfx.h"
 
 SDL_Surface* get_image(const char* name);
 
@@ -53,17 +53,13 @@ static struct glyph_info* glyphs[2];
 static int glyph_counts[2];
 static SDL_Surface* fontimages[2];
 
-extern SDL_Surface* screen;
-
 void load_font()
 {
-  int i;
-
   glyphs[0] = (struct glyph_info*) font_32;
 
   glyph_counts[0] = size_font_32 / sizeof(struct glyph_info);
 
-  for(i = 0; i < glyph_counts[0] * sizeof(struct glyph_info) / sizeof(int); ++i)
+  for(size_t i = 0; i < glyph_counts[0] * sizeof(struct glyph_info) / sizeof(int); ++i)
     ((int*) glyphs[0])[i] = ntohl(((int*) glyphs[0])[i]);
 
   fontimages[0] = get_image("font_32.png");
@@ -72,12 +68,12 @@ void load_font()
 
   glyph_counts[1] = size_font_16 / sizeof(struct glyph_info);
 
-  for(i = 0; i < glyph_counts[1] * sizeof(struct glyph_info) / sizeof(int); ++i)
+  for(size_t i = 0; i < glyph_counts[1] * sizeof(struct glyph_info) / sizeof(int); ++i)
     ((int*) glyphs[1])[i] = ntohl(((int*) glyphs[1])[i]);
 
   fontimages[1] = get_image("font_16.png");
 
-  for(i = 0; i < glyph_counts[1]; ++i)
+  for(int i = 0; i < glyph_counts[1]; ++i)
   {
     if(glyphs[1][i].character == 'j')
       glyphs[1][i].xskip += 1;

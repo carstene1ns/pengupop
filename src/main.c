@@ -15,7 +15,7 @@
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-#include <SDL/SDL.h>
+#include <SDL3/SDL.h>
 
 #ifndef WIN32
 #include <arpa/inet.h>
@@ -47,12 +47,13 @@
 #include "error.h"
 #include "common.h"
 #include "packet.h"
+#include "gfx.h"
 #include "sound.h"
 
 extern unsigned char saved_level;
 extern unsigned char level;
 
-extern const char* gameid;
+const char* gameid = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAZ";
 
 #ifndef WIN32
 typedef int SOCKET;
@@ -71,17 +72,9 @@ static struct option long_options[] =
   { "windowed", 0, 0, 'w' },
   { 0, 0, 0, 0 }
 };
-
-extern void play_single_player();
 #endif
 
-int hwalpha;
-
-int fullscreen = 1; /* XXX: Change to 1 before release */
-int sound_enable = 1;
-SDL_Surface* screen;
-
-int time_stepms = 8;
+Uint32 time_stepms = 8;
 float time_step = 0.008f;
 unsigned short listenport;
 SOCKET listenfd = INVALID_SOCKET;
@@ -111,9 +104,9 @@ static unsigned int last_evil;
 
 Uint32 last_tick = 0;
 
-static int    repeat_sym;
-static int    repeat_key;
-static Uint32 repeat_time;
+static SDL_Keycode repeat_sym;
+static int         repeat_key;
+static Uint32      repeat_time;
 
 struct event eventlog[256];
 unsigned int event_count = 0;
@@ -349,7 +342,6 @@ static void scan(struct player_state* p, int x, int y, int color, int* matches, 
 
 void remove_bubble(struct player_state* p, int x, int y, int evil)
 {
-  int i;
   struct moving_bubble mbubble;
 
   mbubble.falling = 1;
@@ -362,7 +354,7 @@ void remove_bubble(struct player_state* p, int x, int y, int evil)
   mbubble.lastpaintx = mbubble.x;
   mbubble.lastpainty = mbubble.y;
 
-  for(i = 0; i < sizeof(p->mbubbles) / sizeof(p->mbubbles[0]); ++i)
+  for(size_t i = 0; i < sizeof(p->mbubbles) / sizeof(p->mbubbles[0]); ++i)
   {
     if(p->mbubbles[i].color == 0 && p->mbubbles[i].lastpaintx == INT_MIN)
     {
@@ -387,11 +379,11 @@ static void chatlog_append(int is_private, const wchar_t* m)
   // not interested in detecting our own words.
   if (wcsncmp(m, L"*** You got a call for fight", 28) == 0)
   {
-    sounds[0].pos = 0;  // explosion
+    sound_play(SFX_DESTROY);  // explosion
   }
   if (length > 0 && username[0]!=0 && wcsstr(m+1, username) != NULL)
   {
-    sounds[2].pos = 0;  // piou!
+    sound_play(SFX_REBOUND);  // piou!
   }
 
   if(string_width(1, m, length) > CHAT_WIDTH)
@@ -486,17 +478,10 @@ static void log_round()
 
   submit_events();
 
-#ifndef WIN32
   if(won)
-    swprintf(buf, sizeof(buf) / sizeof(buf[0]), L"*** VICTORY! Won %u of %u total.  Press enter to continue.", players[0].score, players[0].score + players[1].score);
+    swprintf(buf, ARRAY_SIZE(buf), L"*** VICTORY! Won %u of %u total.  Press enter to continue.", players[0].score, players[0].score + players[1].score);
   else
-    swprintf(buf, sizeof(buf) / sizeof(buf[0]), L"*** DEFEAT! Won %u of %u total.  Press enter to continue.", players[0].score, players[0].score + players[1].score);
-#else
-  if(won)
-    swprintf(buf, L"*** VICTORY! Won %u of %u total.  Press enter to continue.", players[0].score, players[0].score + players[1].score);
-  else
-    swprintf(buf, L"*** DEFEAT!  Won %u of %u total.  Press enter to continue.", players[0].score, players[0].score + players[1].score);
-#endif
+    swprintf(buf, ARRAY_SIZE(buf), L"*** DEFEAT! Won %u of %u total.  Press enter to continue.", players[0].score, players[0].score + players[1].score);
 
   chatlog_append(1, buf);
 }
@@ -523,7 +508,7 @@ static void send_packet(struct data_packet* p)
   if(!state)
     state = &outbuffer_state, buffer = outbuffer, fd = &serverfd;
 
-  if(*state + packet_size > sizeof(outbuffer))
+  if(*state + packet_size > (int)sizeof(outbuffer))
   {
     close(*fd);
     *fd = INVALID_SOCKET;
@@ -599,8 +584,8 @@ static int test_group(struct player_state* p, int bx, int by, int color)
 
   if(match_count >= 3)
   {
-    if(p != &players[1] && sound_enable)
-      sounds[0].pos = 0;
+    if(p != &players[1])
+      sound_play(SFX_DESTROY);
 
     for(i = 0; i < match_count; ++i)
     {
@@ -623,8 +608,8 @@ int stick(struct player_state* p, int bx, int by, int color)
   if(by >= field_height)
     return 0;
 
-  if(p != &players[1] && sound_enable)
-    sounds[3].pos = 0;
+  if(p != &players[1])
+    sound_play(SFX_STICK);
 
   p->field[by][bx] = color;
   mark_dirty(p, bx * 32 + ((by & 1) ? 16 : 0), by * 28, 32, 32);
@@ -757,7 +742,7 @@ void cond_blit(struct player_state* p, SDL_Surface* source, SDL_Rect* source_rec
 
 static void game_tick(int paint)
 {
-  int i, j, k;
+  int i, j;
   int player;
   int yoff, xoff;
   int bx, by;
@@ -783,7 +768,7 @@ static void game_tick(int paint)
     else if(p->angle > 85)
       p->angle = 85;
 
-    for(k = 0; k < sizeof(p->mbubbles) / sizeof(p->mbubbles[0]); ++k)
+    for(size_t k = 0; k < sizeof(p->mbubbles) / sizeof(p->mbubbles[0]); ++k)
     {
       struct moving_bubble* b = &p->mbubbles[k];
 
@@ -800,16 +785,16 @@ static void game_tick(int paint)
           b->x = -b->x;
           b->velx = -b->velx;
 
-          if(player == 0 && sound_enable)
-            sounds[2].pos = 0;
+          if(player == 0)
+            sound_play(SFX_REBOUND);
         }
         else if(b->x > max_x)
         {
           b->x = 2 * max_x - b->x;
           b->velx = -b->velx;
 
-          if(player == 0 && sound_enable)
-            sounds[2].pos = 0;
+          if(player == 0)
+            sound_play(SFX_REBOUND);
         }
 
         for(i = -1; i < field_height; ++i)
@@ -962,7 +947,7 @@ collide:;
         SDL_BlitSurface(background, &rect, screen, &rect);
       }
 
-      for(i = 0; i < sizeof(p->mbubbles) / sizeof(p->mbubbles[0]); ++i)
+      for(size_t i = 0; i < sizeof(p->mbubbles) / sizeof(p->mbubbles[0]); ++i)
       {
         if(p->mbubbles[i].lastpaintx == INT_MIN)
           continue;
@@ -1052,7 +1037,7 @@ collide:;
       p->dirty_maxx = 0;
       p->dirty_maxy = 0;
 
-      for(i = 0; i < sizeof(p->mbubbles) / sizeof(p->mbubbles[0]); ++i)
+      for(size_t i = 0; i < sizeof(p->mbubbles) / sizeof(p->mbubbles[0]); ++i)
       {
         if(!p->mbubbles[i].color)
           continue;
@@ -1105,7 +1090,6 @@ static int random_bubble(struct player_state* p)
 
 void shoot(struct player_state* p, int color, int velocity)
 {
-  int i;
   struct moving_bubble mbubble;
   float speed = (velocity == -1) ? bubble_speed : velocity;
 
@@ -1117,7 +1101,7 @@ void shoot(struct player_state* p, int color, int velocity)
   mbubble.y = 350.0f;
   mbubble.color = p->bubble + 1;
 
-  for(i = 0; i < sizeof(p->mbubbles) / sizeof(p->mbubbles[0]); ++i)
+  for(size_t i = 0; i < sizeof(p->mbubbles) / sizeof(p->mbubbles[0]); ++i)
   {
     if(p->mbubbles[i].color == 0)
     {
@@ -1139,14 +1123,11 @@ void shoot(struct player_state* p, int color, int velocity)
       p->next_bubble = color;
   }
 
-  if(sound_enable)
-    sounds[1].pos = 0;
+  sound_play(SFX_LAUNCH);
 }
 
 void init_player(struct player_state* p)
 {
-  int i;
-
   mark_dirty(p, 0, 0, max_field_width * 32, 440);
   p->last_angle = -1.0f;
   p->angle = 0.0f;
@@ -1155,7 +1136,7 @@ void init_player(struct player_state* p)
   p->max_evil = 0;
   p->evil_bubble_seed = 0;
 
-  for(i = 0; i < sizeof(p->mbubbles) / sizeof(p->mbubbles[0]); ++i)
+  for(size_t i = 0; i < sizeof(p->mbubbles) / sizeof(p->mbubbles[0]); ++i)
   {
     p->mbubbles[i].color = 0;
     p->mbubbles[i].lastpaintx = INT_MIN;
@@ -1296,7 +1277,7 @@ void connect_to_master()
 
     if(ERROR_SUCCESS == RegOpenKeyEx(HKEY_CURRENT_USER, "Software\\Junoplay.com\\Pengupop\\Config", 0, KEY_READ, &k_config))
     {
-      if(ERROR_SUCCESS == RegQueryValueEx(k_config, "auth", 0, 0, buf, &bufsize))
+      if(ERROR_SUCCESS == RegQueryValueEx(k_config, "auth", 0, 0, (LPBYTE) buf, &bufsize))
       {
         buf[63] = 0;
 
@@ -1528,7 +1509,7 @@ void process_packet(struct data_packet* packet)
         }
       }
 
-      for(i = 0; i < sizeof(players[1].mbubbles) / sizeof(players[1].mbubbles[0]); ++i)
+      for(size_t i = 0; i < sizeof(players[1].mbubbles) / sizeof(players[1].mbubbles[0]); ++i)
       {
         if(i < packet->movement.mbubble_count)
         {
@@ -1638,7 +1619,7 @@ void process_packet(struct data_packet* packet)
           snprintf(auth, sizeof(auth), "%ls:%ls", username, password);
           auth[63] = 0;
 
-          RegSetValueEx(k_config, "auth", 0, REG_SZ, auth, strlen(auth));
+          RegSetValueEx(k_config, "auth", 0, REG_SZ, (const BYTE *) auth, strlen(auth));
         }
       }
 #endif
@@ -1726,12 +1707,7 @@ static void join_random(int registered_only)
   mode = MODE_GAME;
 }
 
-#ifndef WIN32
 int main(int argc, char** argv)
-#else
-int PASCAL WinMain(HINSTANCE instance, HINSTANCE previnstance,
-                   LPSTR cmdline, int cmdshow)
-#endif
 {
   int i, j, k, selection = 0;
   SDL_Event event;
@@ -1740,38 +1716,7 @@ int PASCAL WinMain(HINSTANCE instance, HINSTANCE previnstance,
 #ifdef WIN32
   FreeConsole();
 
-  do /* Register `pengupop' URL handler */
-  {
-    char fname[1024];
-    char command[1024];
-    HKEY k_pengupop;
-    HKEY k_command;
-
-    GetModuleFileName(0, fname, sizeof(fname));
-    snprintf(command, sizeof(command) - 1, "\"%s\" %%1", fname);
-    command[1023] = 0;
-
-    if(ERROR_SUCCESS != RegCreateKey(HKEY_CLASSES_ROOT, "pengupop", &k_pengupop))
-      break;
-
-    RegSetValueEx(k_pengupop, 0, 0, REG_SZ, "URL:Pengupop Protocol", strlen("URL:Pengupop Protocol"));
-    RegSetValueEx(k_pengupop, "URL Protocol", 0, REG_SZ, "", 0);
-
-    if(ERROR_SUCCESS != RegCreateKey(HKEY_CLASSES_ROOT, "pengupop\\shell\\open\\command", &k_command))
-      break;
-
-    RegSetValueEx(k_command, 0, 0, REG_SZ, command, strlen(command));
-
-    RegCloseKey(k_command);
-    RegCloseKey(k_pengupop);
-  }
-  while(0);
-
-  if(strlen(cmdline) > 6)
-    fullscreen = 0;
-
   WSADATA wsadata;
-
   WSAStartup(0x0101, &wsadata);
 #else
   signal(SIGPIPE, SIG_IGN);
@@ -1797,7 +1742,7 @@ int PASCAL WinMain(HINSTANCE instance, HINSTANCE previnstance,
 
     case 'w':
 
-      fullscreen = 0;
+      fullscreen = false;
 
       break;
 
@@ -1829,38 +1774,23 @@ int PASCAL WinMain(HINSTANCE instance, HINSTANCE previnstance,
   }
 #endif
 
-  if(-1 == SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO))
+  if(!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO))
     fatal_error("SDL initialization failed: %s", SDL_GetError());
-
   atexit(SDL_Quit);
 
-  SDL_EnableUNICODE(1);
-
-  screen = SDL_SetVideoMode(width, height, 0, SDL_SWSURFACE | (fullscreen ? SDL_FULLSCREEN : 0));
-
-  if(hwalpha)
-    info("Has HW alpha");
-
-  if(!screen)
-    fatal_error("Failed to create window: %s", SDL_GetError());
-
-  SDL_WM_SetCaption("Pengupop", 0);
-  SDL_ShowCursor(0);
+  GFX_init();
+  atexit(GFX_deinit);
 
   load_images();
   load_font();
 
   chat = get_image("chat.png");
-  SDL_SetAlpha(chat, 0, 0);
-
   logo = get_image("logo.png");
-  SDL_SetAlpha(logo, 0, 0);
 
   SDL_BlitSurface(logo, 0, screen, 0);
-  SDL_UpdateRect(screen, 0, 0, 0, 0);
+  GFX_UpdateScreen();
 
   background = get_image("backgrnd.png");
-  SDL_SetAlpha(background, 0, 0);
 
 #if LINUX || DARWIN
   if(getenv("HOME"))
@@ -1892,7 +1822,7 @@ int PASCAL WinMain(HINSTANCE instance, HINSTANCE previnstance,
 
     if(ERROR_SUCCESS == RegOpenKeyEx(HKEY_CURRENT_USER, "Software\\Junoplay.com\\Pengupop\\Config", 0, KEY_READ, &k_config))
     {
-      if(ERROR_SUCCESS == RegQueryValueEx(k_config, "bananas", 0, 0, buf, &bufsize))
+      if(ERROR_SUCCESS == RegQueryValueEx(k_config, "bananas", 0, 0, (LPBYTE) buf, &bufsize))
       {
         buf[63] = 0;
 
@@ -1930,53 +1860,8 @@ int PASCAL WinMain(HINSTANCE instance, HINSTANCE previnstance,
 
   start_listening();
 
-#ifdef WIN32
-  if(strlen(cmdline) > 6)
-  {
-    connect_to_master();
-
-    if(serverfd == INVALID_SOCKET)
-    {
-      wcscpy(message, L"Failed to Connect to Master Server");
-
-      mode = MODE_ABORT_MESSAGE;
-    }
-    else
-    {
-      struct data_packet p;
-
-      p.packet_type = packet_create_game;
-      p.payload_size = sizeof(p.create_game);
-
-      memset(p.create_game.name, 0, 32);
-
-      for(i = 0; i < 32 && cmdline[i]; ++i)
-        p.create_game.name[i] = cmdline[i];
-
-      send_packet(&p);
-
-      wcscpy(message, L"Waiting for Other Player");
-
-      mode = MODE_WAITING;
-    }
-  }
-#endif
-
-  sdl_audio.freq = 44100;
-  sdl_audio.format = AUDIO_S16SYS;
-  sdl_audio.channels = 1;
-  sdl_audio.samples = 1024;
-  sdl_audio.callback = sound_callback;
-  sdl_audio.userdata = 0;
-
-  if(-1 != SDL_OpenAudio(&sdl_audio, 0))
-  {
-    load_sounds();
-
-    SDL_PauseAudio(0);
-  }
-  else
-    sdl_audio.freq = 0;
+  init_sound();
+  atexit(deinit_sound);
 
   for(;;)
   {
@@ -2464,11 +2349,7 @@ int PASCAL WinMain(HINSTANCE instance, HINSTANCE previnstance,
         wchar_t buf[256];
 
         print_string(0, 320 + (selection == 3 ? bump : 0), 370, L"Log Out", 1);
-#ifndef WIN32
-        swprintf(buf, sizeof(buf) / sizeof(buf[0]), L"Logged in as %ls.", username);
-#else
-        swprintf(buf, L"Logged in as %ls.", username);
-#endif
+        swprintf(buf, ARRAY_SIZE(buf), L"Logged in as %ls.", username);
 
         print_string(1, 320, 410, buf, 1);
       }
@@ -2572,11 +2453,8 @@ int PASCAL WinMain(HINSTANCE instance, HINSTANCE previnstance,
           message[message_cursor] = L'|';
         else
           message[message_cursor] = L' ';
-#ifndef WIN32
-          swprintf(buf, sizeof(buf) / sizeof(buf[0]), L"%ls", message + off);
-#else
-          swprintf(buf, L"%ls", message + off);
-#endif
+        swprintf(buf, ARRAY_SIZE(buf), L"%ls", message + off);
+
         // Remove inserted cursor :
         memmove(message+message_cursor,
                 message+message_cursor+1,
@@ -2607,18 +2485,18 @@ int PASCAL WinMain(HINSTANCE instance, HINSTANCE previnstance,
     {
       switch(event.type)
       {
-      case SDL_QUIT:
+      case SDL_EVENT_QUIT:
 
         exit(EXIT_SUCCESS);
 
         break;
 
-      case SDL_KEYDOWN:
+      case SDL_EVENT_KEY_DOWN:
 
-        if(event.key.keysym.unicode >= 32
-        && has_char(0, event.key.keysym.unicode)
+        if(event.key.key >= 32
+        && has_char(0, event.key.key)
         && (mode == MODE_LOUNGE || mode == MODE_SCORE)
-        && !(event.key.keysym.mod & (KMOD_LALT | KMOD_RALT)))
+        && !(event.key.mod & (SDL_KMOD_LALT | SDL_KMOD_RALT)))
         {
           int length = 0;
 
@@ -2629,7 +2507,7 @@ int PASCAL WinMain(HINSTANCE instance, HINSTANCE previnstance,
 
             if(length < 16)
             {
-              username[length] = event.key.keysym.unicode;
+              username[length] = event.key.key;
               username[length + 1] = 0;
             }
           }
@@ -2640,21 +2518,21 @@ int PASCAL WinMain(HINSTANCE instance, HINSTANCE previnstance,
 
             if(length < 16)
             {
-              password[length] = event.key.keysym.unicode;
+              password[length] = event.key.key;
               password[length + 1] = 0;
             }
           }
           else if(auth_level == 3 || mode == MODE_SCORE)
           {
-            message_insert(event.key.keysym.unicode);
-            repeat_sym = event.key.keysym.sym;
-            repeat_key = event.key.keysym.unicode;
+            message_insert(event.key.key);
+            repeat_sym = event.key.key;
+            repeat_key = event.key.key;
             repeat_time = SDL_GetTicks() + 250;
             }
           continue;
         }
 
-        switch(event.key.keysym.sym)
+        switch(event.key.key)
         {
         case SDLK_ESCAPE:
 
@@ -2791,11 +2669,7 @@ int PASCAL WinMain(HINSTANCE instance, HINSTANCE previnstance,
               if(mode == MODE_SCORE)
               {
                 wchar_t buf[270];
-#ifndef WIN32
-                swprintf(buf, sizeof(buf) / sizeof(buf[0]), L"You: %ls", message);
-#else
-                swprintf(buf, L"You: %ls", message);
-#endif
+                swprintf(buf, ARRAY_SIZE(buf), L"You: %ls", message);
                 chatlog_append(1, buf);
 
                 p.chat.is_private = 1;
@@ -2817,7 +2691,7 @@ int PASCAL WinMain(HINSTANCE instance, HINSTANCE previnstance,
             break;
           }
 
-          /* Fall through, used for shooting */
+          /* Fall through - used for shooting */
 
         case SDLK_SPACE:
 
@@ -2898,7 +2772,7 @@ int PASCAL WinMain(HINSTANCE instance, HINSTANCE previnstance,
               selection = 0;
             }
           }
-          else if(mode == MODE_GAME && event.key.keysym.sym != SDLK_RETURN)
+          else if(mode == MODE_GAME && event.key.key != SDLK_RETURN)
           {
             if(!has_shot && !input_locked)
             {
@@ -2982,7 +2856,7 @@ int PASCAL WinMain(HINSTANCE instance, HINSTANCE previnstance,
           else if(mode == MODE_LOUNGE || mode == MODE_SCORE)
           {
             cursor_left();
-            repeat_sym = event.key.keysym.sym;
+            repeat_sym = event.key.key;
             repeat_key = '\n';
             repeat_time = SDL_GetTicks() + 250;
           }
@@ -2998,7 +2872,7 @@ int PASCAL WinMain(HINSTANCE instance, HINSTANCE previnstance,
           else if(mode == MODE_LOUNGE || mode == MODE_SCORE)
           {
             cursor_right();
-            repeat_sym = event.key.keysym.sym;
+            repeat_sym = event.key.key;
             repeat_key = '\r';
             repeat_time = SDL_GetTicks() + 250;
           }
@@ -3030,7 +2904,7 @@ int PASCAL WinMain(HINSTANCE instance, HINSTANCE previnstance,
               message_backspace();
             }
 
-            repeat_sym = event.key.keysym.sym;
+            repeat_sym = event.key.key;
             repeat_key = '\b';
             repeat_time = SDL_GetTicks() + 250;
           }
@@ -3040,7 +2914,7 @@ int PASCAL WinMain(HINSTANCE instance, HINSTANCE previnstance,
           if((mode == MODE_LOUNGE && auth_level == 3) || mode == MODE_SCORE)
           {
             message_delete();
-            repeat_sym = event.key.keysym.sym;
+            repeat_sym = event.key.key;
             repeat_key = '\v';
             repeat_time = SDL_GetTicks() + 250;
           }
@@ -3062,20 +2936,14 @@ int PASCAL WinMain(HINSTANCE instance, HINSTANCE previnstance,
 
         case 's':
 
-          sound_enable = !sound_enable;
+          sound_enabled = !sound_enabled;
 
           break;
 
         case 'f':
 
-#ifndef WIN32
-          SDL_WM_ToggleFullScreen(screen);
-#else
-          if(fullscreen)
-            screen = SDL_SetVideoMode(width, height, 0, SDL_SWSURFACE);
-          else
-            screen = SDL_SetVideoMode(width, height, 0, SDL_SWSURFACE | SDL_FULLSCREEN);
-
+          GFX_ToggleFullScreen();
+#if 0
           if(mode != MODE_GAME)
           {
             SDL_BlitSurface(logo, 0, screen, 0);
@@ -3093,7 +2961,6 @@ int PASCAL WinMain(HINSTANCE instance, HINSTANCE previnstance,
             }
           }
 #endif
-          fullscreen = !fullscreen;
 
           break;
 
@@ -3102,12 +2969,12 @@ int PASCAL WinMain(HINSTANCE instance, HINSTANCE previnstance,
 
         break;
 
-      case SDL_KEYUP:
+      case SDL_EVENT_KEY_UP:
 
-        if(event.key.keysym.sym == repeat_sym)
+        if(event.key.key == repeat_sym)
           repeat_key = 0;
 
-        switch(event.key.keysym.sym)
+        switch(event.key.key)
         {
         case SDLK_LEFT:
 
@@ -3144,7 +3011,7 @@ int PASCAL WinMain(HINSTANCE instance, HINSTANCE previnstance,
     {
       struct player_state* p = &players[0];
 
-      i = 0;
+      size_t i = 0;
 
       if(p->evil_bubble_count > 4)
         p->evil_bubble_count = 4;
@@ -3213,7 +3080,7 @@ int PASCAL WinMain(HINSTANCE instance, HINSTANCE previnstance,
         packet.movement.mbubble_count = 0;
         packet.payload_size += 54;
 
-        for(i = 0; i < sizeof(players[0].mbubbles) / sizeof(players[0].mbubbles[0]); ++i)
+        for(size_t i = 0; i < sizeof(players[0].mbubbles) / sizeof(players[0].mbubbles[0]); ++i)
         {
           if(players[0].mbubbles[i].color != 0)
           {
@@ -3233,6 +3100,6 @@ int PASCAL WinMain(HINSTANCE instance, HINSTANCE previnstance,
       send_packet(&packet);
     }
 
-    SDL_UpdateRect(screen, 0, 0, 0, 0);
+    GFX_UpdateScreen();
   }
 }
